@@ -6,3 +6,4 @@ matplotlib
 arch
 statsmodels
 mpltw
+plotly
