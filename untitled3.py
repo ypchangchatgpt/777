@@ -144,13 +144,13 @@ if st.button('開始分析'):
     # 畫第一個數據集和設置 Y 軸
     ax1.set_xlabel('Time')
     ax1.set_ylabel('均值預測', color='black')
-    ax1.plot(forecast['Mean Forecast'], color='blue', label='均值預測')
+    ax1.plot(forecast['Mean Forecast'], color='green', label='均值預測')
     ax1.tick_params(axis='y', labelcolor='black')
 
     # 創建一個共享 X 軸但不同 Y 軸的第二個軸
     ax2 = ax1.twinx()  
     ax2.set_ylabel('波動率預測', color='black')
-    ax2.plot(forecast['Vol_Forecast'], color='green', label='波動率預測')
+    ax2.plot(forecast['Vol_Forecast'], color='blue', label='波動率預測')
     ax2.tick_params(axis='y', labelcolor='black')
 
     # 添加標題和顯示圖例
@@ -161,18 +161,30 @@ if st.button('開始分析'):
 
 
 
-
-    data_mean = pd.concat([data2, mean_forecast], axis=1) 
-    data_mean.columns = ['Log Returns', 'Mean Forecast']
-    data_mean['Mean Forecast'] = data_mean['Mean Forecast'].shift(1)
+    
+    data = pd.concat([data2, forecast], axis=1) 
+    data.columns = ['Log_Return','Mean Forecast', 'Vol_Forecast']
     # 繪製預測結果
-    st.subheader('均值預測 vs 實際收益率')
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(data_mean['Mean Forecast'], color='blue', label='均值預測')
-    ax.plot(data_mean['Log Returns'], color='green', label='實際收益率')
-    ax.set_title('均值預測 vs 實際收益率')
-    ax.set_ylabel('%')
-    ax.legend()
+    st.subheader('均值預測 vs 波動率預測 VS 實際報酬')
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # 畫第一個數據集和設置 Y 軸
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('報酬率％', color='black')
+    ax1.plot(data['Mean Forecast'], color='blue', label='均值預測')
+    ax1.plot(data['Log_Return'], color='green', label='實際報酬')
+    ax1.tick_params(axis='y', labelcolor='black')
+
+    # 創建一個共享 X 軸但不同 Y 軸的第二個軸
+    ax2 = ax1.twinx()  
+    ax2.set_ylabel('波動率預測', color='black')
+    ax2.plot(data['Vol_Forecast'], color='red', label='波動率預測')
+    ax2.tick_params(axis='y', labelcolor='black')
+
+    # 添加標題和顯示圖例
+    fig.tight_layout()  
+    plt.title('均值預測 vs 波動率預測 VS 實際報酬')
+    fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=ax1.transAxes)
     st.pyplot(fig)
 
 
@@ -206,8 +218,8 @@ if st.button('開始分析'):
     # 繪製實際價格與預測價格對比圖
     st.subheader('實際價格對比預測價格')
     fig2, ax2 = plt.subplots(figsize=(12, 6))
-    ax2.plot(data_price['close_forecast'], color='red', label='預測價格')
-    ax2.plot(data_price['close'], color='blue', label='實際價格')
+    ax2.plot(data_price['close_forecast'], color='blue', label='預測價格')
+    ax2.plot(data_price['close'], color='green', label='實際價格')
     ax2.set_title('實際價格對比預測價格')
     ax2.set_ylabel('＄')
     ax2.legend()
