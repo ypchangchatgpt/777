@@ -1,4 +1,5 @@
 #streamlit run /Users/lizongsiou/Desktop/untitled3.py
+
 import streamlit as st
 import yfinance as yf
 import numpy as np
@@ -8,27 +9,61 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from datetime import datetime
 import mpltw
-
+import datetime as dt
+import plotly.graph_objects as go
+import plotly.express as px
 # Streamlit 應用標題
 st.title('股票模型分析及預測分析')
 
-# 讓用戶選擇股票代碼和日期範圍
-stock_symbol = st.text_input('請輸入股票代碼，例如 "0050.TW"', '0050.TW')
-start_date = st.text_input('模型開始日期，格式：YYYY-MM-DD', '2019-01-01')
-end_date = st.text_input('模型結束日期，格式：YYYY-MM-DD', '2021-12-31')
-start_date1 = st.text_input('預測開始日期，格式：YYYY-MM-DD', '2022-01-01')
-end_date1 = st.text_input('預測結束日期，格式：YYYY-MM-DD', '2023-12-31')
+
+url = "https://www.taifex.com.tw/cht/9/futuresQADetail"
+table = pd.read_html(url)
+stocks1 = table[0].iloc[:,1:4]
+stocks2 = table[0].iloc[:,5:8]
+stocks1.columns = ["代號", "證券名稱", "市值佔大盤比重"]
+stocks2.columns = ["代號", "證券名稱", "市值佔大盤比重"]
+stocks1 = stocks1.dropna()
+stocks2 = stocks2.dropna()
+stocks1["代號"] = stocks1["代號"].astype(str)
+stocks2["代號"] = [str(int(stocks_代號)) for stocks_代號 in stocks2["代號"]]
+# stocks2["代號"] 有 .0。
+stocks = pd.concat([stocks1, stocks2], axis=0)
+stocks = stocks.reset_index(drop=True)
+# stocks["市值佔大盤比重"] 最後為 % 符號。
+stocks["市值佔大盤比重"] = stocks["市值佔大盤比重"].str[:-1].astype(float)/100
+stocks["代號"] = [stocks["代號"][i]+".TW" for i in range(len(stocks))]
+stocks["代號_證券名稱_市值佔大盤比重"] = [stocks["代號"][i]+" "+stocks["證券名稱"][i]+" "+str(round(stocks["市值佔大盤比重"][i], 6)) for i in range(len(stocks))]
+
+
+stock_ticker_name = st.sidebar.selectbox(label="請輸入股票代號_證券名稱_市值佔大盤比重",
+                                         options=stocks["代號_證券名稱_市值佔大盤比重"])
+stock_symbol  = stock_ticker_name.split(" ")[0]
+
+start_date = st.sidebar.date_input(label="模型開始日期",
+                              value=dt.date(2020, 1, 1),
+                              format="YYYY-MM-DD")
+end_date = st.sidebar.date_input(label="模型結束日期",
+                            value=dt.date(2021,12,31),
+                            # value="today",
+                            format="YYYY-MM-DD")
+start_date1 = st.sidebar.date_input(label="預測開始日期",
+                              value=dt.date(2022, 1, 1),
+                              format="YYYY-MM-DD")
+end_date1 = st.sidebar.date_input(label="預測結束日期",
+                            value=dt.date(2023,12,31),
+                            # value="today",
+                            format="YYYY-MM-DD")
 
 # 讓用戶自定義參數
-mean_options = st.multiselect('選擇均值模型', ['AR', 'Constant', 'Zero','LS','ARX','HAR','HARX'], default=['AR'])
-dist_options = st.multiselect('選擇分佈', ['normal', 't', 'skewt','gaussian','studentst','skewstudent','ged','generalized error'], default=['normal'])
-max_lags = st.number_input('設定最大滯後項', min_value=0, max_value=10, value=3)
-max_p = st.number_input('設定最大自回歸項', min_value=0, max_value=10, value=3)
-max_q = st.number_input('設定最大移動平均項', min_value=0, max_value=10, value=3)
-max_o = st.number_input('設定最大不對稱項', min_value=0, max_value=10, value=3)
+mean_options = st.sidebar.multiselect('選擇均值模型', ['AR', 'Constant', 'Zero','LS','ARX','HAR','HARX'], default=['AR'])
+dist_options = st.sidebar.multiselect('選擇分佈', ['normal', 't', 'skewt','gaussian','studentst','skewstudent','ged','generalized error'], default=['normal'])
+max_lags = st.sidebar.number_input('設定最大滯後項(Lags)', min_value=0, max_value=10, value=3)
+max_p = st.sidebar.number_input('設定最大自回歸項(P)', min_value=0, max_value=10, value=3)
+max_q = st.sidebar.number_input('設定最大移動平均項(Q)', min_value=0, max_value=10, value=3)
+max_o = st.sidebar.number_input('設定最大不對稱項(O)', min_value=0, max_value=10, value=3)
 
 # 當用戶輸入所有信息後運行分析
-if st.button('開始分析'):
+if st.sidebar.button('開始分析'):
     # 加載數據
     stock_data = yf.download(stock_symbol, start='2000-01-01', end=datetime.now(), auto_adjust=True)
     data_all = np.log(stock_data['Close']/stock_data['Close'].shift(1)).dropna()*100
@@ -88,14 +123,11 @@ if st.button('開始分析'):
     lb_test = sm.stats.acorr_ljungbox(residuals_std, lags=lags, model_df=best_lags)
     # Ljung-Box 檢定的視覺化
     st.subheader('Ljung-Box 檢定')
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(lb_test.index, lb_test['lb_pvalue'], marker='o', linestyle='None')
-    ax.axhline(y=0.05, color='r', linestyle='--', label='顯著性水平：0.05')
-    ax.set_title('Ljung-Box 檢定')
-    ax.set_xlabel('滯後期數量')
-    ax.set_ylabel('p-value')
-    ax.legend()
-    st.pyplot(fig)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=lb_test.index, y=lb_test['lb_pvalue'], mode='markers', name='p-value'))
+    fig.add_hline(y=0.05, line=dict(color='red', dash='dash'), annotation_text='顯著性水平：0.05')
+    fig.update_layout(title='Ljung-Box 檢定', xaxis_title='lags', yaxis_title='p-value')
+    st.plotly_chart(fig)
     if (lb_test['lb_pvalue'].dropna() > 0.05).all():
         st.write('殘差符合AR模型假設。')
     else:
@@ -103,14 +135,11 @@ if st.button('開始分析'):
     #Ljung-Box 檢定（殘差平方）
     lb_test_squared = sm.stats.acorr_ljungbox(residuals_std**2, lags=lags, model_df=best_lags)
     st.subheader('Ljung-Box 檢定（殘差平方）')
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(lb_test_squared.index, lb_test_squared['lb_pvalue'], marker='o', linestyle='None')
-    ax.axhline(y=0.05, color='r', linestyle='--', label='顯著性水平：0.05')
-    ax.set_title('Ljung-Box 檢定（殘差平方）')
-    ax.set_xlabel('滯後期數量')
-    ax.set_ylabel('p-value')
-    ax.legend()
-    st.pyplot(fig)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=lb_test_squared.index, y=lb_test_squared['lb_pvalue'], mode='markers', name='p-value'))
+    fig.add_hline(y=0.05, line=dict(color='red', dash='dash'), annotation_text='顯著性水平：0.05')
+    fig.update_layout(title='Ljung-Box 檢定（殘差平方）', xaxis_title='lags', yaxis_title='p-value')
+    st.plotly_chart(fig)
     if (lb_test_squared['lb_pvalue'].dropna() > 0.05).all():
         st.write('殘差平方符合AR模型假設。')
     else:
@@ -140,26 +169,11 @@ if st.button('開始分析'):
     forecast['Vol_Forecast'] = forecast['Vol_Forecast'].shift(1)
 
     st.subheader('均值預測 vs 波動率預測')
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-
-    # 畫第一個數據集和設置 Y 軸
-    ax1.set_xlabel('Time')
-    ax1.set_ylabel('均值預測', color='black')
-    ax1.plot(forecast['Mean Forecast'], color='green', label='均值預測')
-    ax1.tick_params(axis='y', labelcolor='black')
-
-    # 創建一個共享 X 軸但不同 Y 軸的第二個軸
-    ax2 = ax1.twinx()  
-    ax2.set_ylabel('波動率預測', color='black')
-    ax2.plot(forecast['Vol_Forecast'], color='blue', label='波動率預測')
-    ax2.tick_params(axis='y', labelcolor='black')
-
-    # 添加標題和顯示圖例
-    fig.tight_layout()  
-    plt.title('均值預測 vs 波動率預測')
-    fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=ax1.transAxes)
-    st.pyplot(fig)
-
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=forecast.index, y=forecast['Mean Forecast'], mode='lines', name='均值預測', line=dict(color='green')))
+    fig.add_trace(go.Scatter(x=forecast.index, y=forecast['Vol_Forecast'], mode='lines', name='波動率預測', line=dict(color='blue'), yaxis="y2"))
+    fig.update_layout(title='均值預測 vs 波動率預測', xaxis_title='Time', yaxis_title='報酬率', yaxis2=dict(title='%', overlaying='y', side='right'))
+    st.plotly_chart(fig)
 
 
     
@@ -167,26 +181,12 @@ if st.button('開始分析'):
     data.columns = ['Log_Return','Mean Forecast', 'Vol_Forecast']
     # 繪製預測結果
     st.subheader('均值預測 vs 波動率預測 VS 實際報酬')
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-
-    # 畫第一個數據集和設置 Y 軸
-    ax1.set_xlabel('Time')
-    ax1.set_ylabel('報酬率％', color='black')
-    ax1.plot(data['Mean Forecast'], color='blue', label='均值預測')
-    ax1.plot(data['Log_Return'], color='green', label='實際報酬')
-    ax1.tick_params(axis='y', labelcolor='black')
-
-    # 創建一個共享 X 軸但不同 Y 軸的第二個軸
-    ax2 = ax1.twinx()  
-    ax2.set_ylabel('波動率預測', color='black')
-    ax2.plot(data['Vol_Forecast'], color='red', label='波動率預測')
-    ax2.tick_params(axis='y', labelcolor='black')
-
-    # 添加標題和顯示圖例
-    fig.tight_layout()  
-    plt.title('均值預測 vs 波動率預測 VS 實際報酬')
-    fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=ax1.transAxes)
-    st.pyplot(fig)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data.index, y=data['Mean Forecast'], mode='lines', name='均值預測', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=data.index, y=data['Log_Return'], mode='lines', name='實際報酬率', line=dict(color='green')))
+    fig.add_trace(go.Scatter(x=data.index, y=data['Vol_Forecast'], mode='lines', name='波動率預測', line=dict(color='red'), yaxis="y2"))
+    fig.update_layout(title='均值預測 vs 波動率預測 VS 實際報酬', xaxis_title='Time', yaxis_title='%', yaxis2=dict(title='%', overlaying='y', side='right'))
+    st.plotly_chart(fig)
 
 
     # 計算波動性指標
@@ -196,17 +196,17 @@ if st.button('開始分析'):
     data_volatility = data_volatility.dropna()
     # 繪製波動性指標圖表
     st.subheader('波動率預測 vs 真實波動值')
-    fig1, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.plot(data_volatility['vol_forecast'], color='blue', label='波動率預測')
-    ax1.plot(data_volatility['real_volatility'], color='green', label='真實波動值')
-    ax1.set_title('波動率預測 vs 真實波動值')
-    ax1.set_ylabel('%')
-    ax1.legend()
-    st.pyplot(fig1)
- 
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data_volatility.index, y=data_volatility['vol_forecast'], mode='lines', name='波動率預測', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=data_volatility.index, y=data_volatility['real_volatility'], mode='lines', name='真實波動值', line=dict(color='green')))
+    fig.update_layout(title='波動率預測 vs 真實波動值',xaxis_title='Time',yaxis_title='%')
+    # 使用 Streamlit 顯示圖表
+    st.plotly_chart(fig)
+
+    # 計算平均絕對誤差 (MAE)
     mae = np.mean(np.abs(data_volatility['vol_forecast'] - data_volatility['real_volatility']))
-    st.write('平均絕對誤差為：')
-    st.write(mae)
+    st.write('平均絕對誤差為：', mae)
+
 
 
     # 實際值和預測值之走勢圖
@@ -219,10 +219,22 @@ if st.button('開始分析'):
 
     # 繪製實際價格與預測價格對比圖
     st.subheader('實際價格對比預測價格')
-    fig2, ax2 = plt.subplots(figsize=(12, 6))
-    ax2.plot(data_price['close_forecast'], color='blue', label='預測價格')
-    ax2.plot(data_price['close'], color='green', label='實際價格')
-    ax2.set_title('實際價格對比預測價格')
-    ax2.set_ylabel('＄')
-    ax2.legend()
-    st.pyplot(fig2)
+    # 創建 Plotly 圖形對象
+    fig2 = go.Figure()
+
+    # 添加預測價格曲線
+    # 使用 go.Scatter 創建曲線，mode='lines' 表示畫線圖
+    fig2.add_trace(go.Scatter(x=data_price.index, y=data_price['close_forecast'], mode='lines', name='預測價格', line=dict(color='blue')))
+
+    # 添加實際價格曲線
+    fig2.add_trace(go.Scatter(x=data_price.index, y=data_price['close'], mode='lines', name='實際價格', line=dict(color='green')))
+
+    # 更新圖表佈局
+    # 設置圖表的標題、X 軸和 Y 軸的標籤
+    fig2.update_layout(
+    title='實際價格對比預測價格',
+    xaxis_title='Time',
+    yaxis_title='＄')
+
+    # 使用 Streamlit 顯示圖表
+    st.plotly_chart(fig2)
