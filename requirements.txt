@@ -1,7 +1,7 @@
-datetime
+streamlit
 yfinance
 numpy
 pandas
-scipy
 matplotlib
-plotly
+arch
+statsmodels
