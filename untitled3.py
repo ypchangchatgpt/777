@@ -7,23 +7,24 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from datetime import datetime
 import mpltw
+
 # Streamlit 應用標題
-st.title('股票數據及預測分析')
+st.title('股票模型分析及預測分析')
 
 # 讓用戶選擇股票代碼和日期範圍
 stock_symbol = st.text_input('請輸入股票代碼，例如 "0050.TW"', '0050.TW')
-start_date = st.text_input('AR模型開始日期，格式：YYYY-MM-DD', '2019-01-01')
-end_date = st.text_input('AR模型結束日期，格式：YYYY-MM-DD', '2021-12-31')
+start_date = st.text_input('模型開始日期，格式：YYYY-MM-DD', '2019-01-01')
+end_date = st.text_input('模型結束日期，格式：YYYY-MM-DD', '2021-12-31')
 start_date1 = st.text_input('預測開始日期，格式：YYYY-MM-DD', '2022-01-01')
 end_date1 = st.text_input('預測結束日期，格式：YYYY-MM-DD', '2023-12-31')
 
 # 讓用戶自定義參數
-mean_options = st.multiselect('選擇均值模型', ['AR', 'Constant', 'Zero'], default=['AR'])
+mean_options = st.multiselect('選擇均值模型', ['AR', 'Constant', 'Zero','LS','ARX','HAR','HARX'], default=['AR'])
+dist_options = st.multiselect('選擇分佈', ['normal', 't', 'skewt','gaussian','studentst','skewstudent','ged','generalized error'], default=['normal'])
 max_lags = st.number_input('設定最大滯後項', min_value=0, max_value=10, value=3)
 max_p = st.number_input('設定最大自回歸項', min_value=0, max_value=10, value=3)
 max_q = st.number_input('設定最大移動平均項', min_value=0, max_value=10, value=3)
 max_o = st.number_input('設定最大不對稱項', min_value=0, max_value=10, value=3)
-dist_options = st.multiselect('選擇分佈', ['normal', 't', 'skewt'], default=['normal'])
 
 # 當用戶輸入所有信息後運行分析
 if st.button('開始分析'):
@@ -69,13 +70,15 @@ if st.button('開始分析'):
                                 residuals_std = residuals2
 
     if best_mean is not None:
-        st.write('最佳模型參數：')
-        st.write(f'均值模型: {best_mean}')
-        st.write(f'滯後項: {best_lags}')
-        st.write(f'分佈: {best_dist}')
-        st.write(f'p: {best_p}')
-        st.write(f'q: {best_q}')
-        st.write(f'o: {best_o}')
+        st.subheader('最佳模型參數：')
+        st.subheader(f'均值模型: {best_mean}')
+        st.subheader(f'滯後項: {best_lags}')
+        st.subheader(f'分佈: {best_dist}')
+        st.subheader(f'P(自回歸項): {best_p}')
+        st.subheader(f'Q(移動平均項) : {best_q}')
+        st.subheader(f'O (不對稱項): {best_o}')
+        st.subheader('模型摘要：')
+        st.write(model_fit.summary())
     else:
         st.write('沒有找到符合條件的模型。')
         
@@ -86,25 +89,32 @@ if st.button('開始分析'):
     st.subheader('Ljung-Box 檢定')
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(lb_test.index, lb_test['lb_pvalue'], marker='o', linestyle='None')
-    ax.axhline(y=0.05, color='r', linestyle='--', label='Significance Level: 0.05')
+    ax.axhline(y=0.05, color='r', linestyle='--', label='顯著性水平：0.05')
     ax.set_title('Ljung-Box 檢定')
     ax.set_xlabel('滯後期數量')
     ax.set_ylabel('p-value')
     ax.legend()
     st.pyplot(fig)
+    if (lb_test['lb_pvalue'].dropna() > 0.05).all():
+        st.write('殘差符合AR模型假設。')
+    else:
+        st.write('殘差不符合AR模型假設。')
     #Ljung-Box 檢定（殘差平方）
     lb_test_squared = sm.stats.acorr_ljungbox(residuals_std**2, lags=lags, model_df=best_lags)
     st.subheader('Ljung-Box 檢定（殘差平方）')
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(lb_test_squared.index, lb_test_squared['lb_pvalue'], marker='o', linestyle='None')
-    ax.axhline(y=0.05, color='r', linestyle='--', label='Significance Level: 0.05')
+    ax.axhline(y=0.05, color='r', linestyle='--', label='顯著性水平：0.05')
     ax.set_title('Ljung-Box 檢定（殘差平方）')
     ax.set_xlabel('滯後期數量')
     ax.set_ylabel('p-value')
     ax.legend()
     st.pyplot(fig)
+    if (lb_test_squared['lb_pvalue'].dropna() > 0.05).all():
+        st.write('殘差平方符合AR模型假設。')
+    else:
+        st.write('殘差平方不符合AR模型假設。')
         
-
     # mean_forecast vol_forecast
     data2 = data_all[start_date1:end_date1]
     data2_n = len(data2)
@@ -123,17 +133,45 @@ if st.button('開始分析'):
         mean_forecast = pd.concat([mean_forecast, mean_forecast0], axis=0)
         vol_forecast = pd.concat([vol_forecast, vol_forecast0], axis=0) 
 
+    forecast = pd.concat([mean_forecast, vol_forecast], axis=1)
+    forecast.columns = ['Mean Forecast', 'Vol_Forecast']
+    forecast['Mean Forecast'] = forecast['Mean Forecast'].shift(1)
+    forecast['Vol_Forecast'] = forecast['Vol_Forecast'].shift(1)
+
+    st.subheader('均值預測 vs 波動率預測')
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # 畫第一個數據集和設置 Y 軸
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('均值預測', color='black')
+    ax1.plot(forecast['Mean Forecast'], color='blue', label='均值預測')
+    ax1.tick_params(axis='y', labelcolor='black')
+
+    # 創建一個共享 X 軸但不同 Y 軸的第二個軸
+    ax2 = ax1.twinx()  
+    ax2.set_ylabel('波動率預測', color='black')
+    ax2.plot(forecast['Vol_Forecast'], color='green', label='波動率預測')
+    ax2.tick_params(axis='y', labelcolor='black')
+
+    # 添加標題和顯示圖例
+    fig.tight_layout()  
+    plt.title('均值預測 vs 波動率預測')
+    fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=ax1.transAxes)
+    st.pyplot(fig)
+
+
+
+
     data_mean = pd.concat([data2, mean_forecast], axis=1) 
     data_mean.columns = ['Log Returns', 'Mean Forecast']
     data_mean['Mean Forecast'] = data_mean['Mean Forecast'].shift(1)
-
     # 繪製預測結果
-    st.subheader('Mean Forecast vs Log Returns')
+    st.subheader('均值預測 vs 實際收益率')
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(data_mean['Mean Forecast'], color='blue', label='Mean Forecast')
-    ax.plot(data_mean['Log Returns'], color='green', label='Test Data')
-    ax.set_title('Mean Forecast vs Test Data')
-    ax.set_ylabel('Value')
+    ax.plot(data_mean['Mean Forecast'], color='blue', label='均值預測')
+    ax.plot(data_mean['Log Returns'], color='green', label='實際收益率')
+    ax.set_title('均值預測 vs 實際收益率')
+    ax.set_ylabel('%')
     ax.legend()
     st.pyplot(fig)
 
@@ -148,12 +186,12 @@ if st.button('開始分析'):
     data_volatility['vol_forecast'] = data_volatility['vol_forecast'].shift(1)
 
     # 繪製波動性指標圖表
-    st.subheader('Volatility Forecast vs Parkinson Volatility')
+    st.subheader('波動率預測 vs 帕金森波動率')
     fig1, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.plot(data_volatility['vol_forecast'], color='blue', label='Volatility Forecast')
-    ax1.plot(data_volatility['parkinson_volatility'], color='green', label='Parkinson Volatility')
-    ax1.set_title('Volatility Forecast vs Parkinson Volatility')
-    ax1.set_ylabel('Value%')
+    ax1.plot(data_volatility['vol_forecast'], color='blue', label='波動率預測')
+    ax1.plot(data_volatility['parkinson_volatility'], color='green', label='帕金森波動率')
+    ax1.set_title('波動率預測 vs 帕金森波動率')
+    ax1.set_ylabel('%')
     ax1.legend()
     st.pyplot(fig1)
 
@@ -166,11 +204,11 @@ if st.button('開始分析'):
     data_price['close_forecast'] = data_price['close_forecast'].shift(1)
 
     # 繪製實際價格與預測價格對比圖
-    st.subheader('Actual Price vs Forecasted Price')
+    st.subheader('實際價格對比預測價格')
     fig2, ax2 = plt.subplots(figsize=(12, 6))
-    ax2.plot(data_price['close_forecast'], color='red', label='Forecasted Price')
-    ax2.plot(data_price['close'], color='blue', label='Actual Price')
-    ax2.set_title('Actual Price vs Forecasted Price')
-    ax2.set_ylabel('Value')
+    ax2.plot(data_price['close_forecast'], color='red', label='預測價格')
+    ax2.plot(data_price['close'], color='blue', label='實際價格')
+    ax2.set_title('實際價格對比預測價格')
+    ax2.set_ylabel('＄')
     ax2.legend()
     st.pyplot(fig2)
