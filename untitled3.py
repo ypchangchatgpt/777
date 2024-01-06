@@ -1,3 +1,4 @@
+#streamlit run /Users/lizongsiou/Desktop/untitled3.py
 import streamlit as st
 import yfinance as yf
 import numpy as np
@@ -189,23 +190,24 @@ if st.button('開始分析'):
 
 
     # 計算波動性指標
-    ln_hl_squared = ((np.log(stock_data['High'] / stock_data['Low']))**2)
-    parkinson_volatility = np.sqrt(ln_hl_squared / (4 * np.log(2)))
-    parkinson_volatility = parkinson_volatility[-data2_n:] * 100
-    stock_data['Parkinson_Volatility'] = parkinson_volatility
-    data_volatility = pd.concat([parkinson_volatility, vol_forecast], axis=1) 
-    data_volatility.columns = ['parkinson_volatility', 'vol_forecast']
-    data_volatility['vol_forecast'] = data_volatility['vol_forecast'].shift(1)
-
+    real_volatility = np.sqrt(data2**2)
+    data_volatility = pd.concat([real_volatility, vol_forecast], axis=1) 
+    data_volatility.columns = ['real_volatility', 'vol_forecast']
+    data_volatility = data_volatility.dropna()
     # 繪製波動性指標圖表
-    st.subheader('波動率預測 vs 帕金森波動率')
+    st.subheader('波動率預測 vs 真實波動值')
     fig1, ax1 = plt.subplots(figsize=(12, 6))
     ax1.plot(data_volatility['vol_forecast'], color='blue', label='波動率預測')
-    ax1.plot(data_volatility['parkinson_volatility'], color='green', label='帕金森波動率')
-    ax1.set_title('波動率預測 vs 帕金森波動率')
+    ax1.plot(data_volatility['real_volatility'], color='green', label='真實波動值')
+    ax1.set_title('波動率預測 vs 真實波動值')
     ax1.set_ylabel('%')
     ax1.legend()
     st.pyplot(fig1)
+ 
+    mae = np.mean(np.abs(data_volatility['vol_forecast'] - data_volatility['real_volatility']))
+    st.write('平均絕對誤差為：')
+    st.write(mae)
+
 
     # 實際值和預測值之走勢圖
     price = stock_data['Close']
